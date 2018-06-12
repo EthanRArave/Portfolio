@@ -1,0 +1,90 @@
+---
+title: "Vehicle Age Per County"
+output: flexdashboard::flex_dashboard
+runtime: shiny
+vertical_layout: row
+---
+
+```{r global, include=TRUE}
+
+library(dplyr)
+library(ggplot2)
+library(plotly)
+library(reshape)
+library(ggthemes)
+library(scales)
+library(shiny)
+
+#Data is a peronally synthesized dataset using the Montana DMV's information, the national traffic association API, and the 2015 census data through tidycensus.
+Cars <- read.csv("CarsPop.csv",header=TRUE)
+
+# Removing one weird "county" that slipped by earlier efforts 
+Vis1dat <- Cars[Cars$Location != "RDC Driver Control",]
+Vis1dat$Model_Age <- (2018 - Vis1dat$Year)
+
+#Cleaning some text, on request
+Vis1dat$Location <- gsub("County","",Vis1dat$Location)
+
+#Generating the "all" county, for comparison accross the vis
+Vis1all  <- Vis1dat %>% group_by(Location) %>% summarise(mean = mean(Model_Age, na.rm = TRUE))
+Vis1all$Manufacturer= "All"
+Vis1dat  <- Vis1dat %>% group_by(Location,Manufacturer) %>% summarise(mean = mean(Model_Age, na.rm = TRUE))
+Vis1all <- Vis1all[,c(1,3,2)] 
+
+#After matching the columns, I simply reintroduced the county="All" rows back into the set
+Vis1dat <- bind_rows(Vis1dat, Vis1all)
+Vis1all <- Vis1all[order(Vis1all$mean,decreasing = TRUE),]
+
+
+#Ordering Factors by the "All"" grouping 
+Vis1dat$Location <- ordered(Vis1dat$Location, levels = c(Vis1all$Location))
+Manlist <- unique(as.character(Vis1dat$Manufacturer))
+
+```
+
+Column {.sidebar}
+-----------------------------------------------------------------------
+### Select Manufacturer
+
+```{r}
+
+selectInput("Man", label = "Manufacturer",
+            choices = Manlist, selected = "All", multiple = TRUE)
+
+```
+
+
+Column {}
+-----------------------------------------------------------------------
+Subset by Manufacturer, or all.
+
+```{r}
+
+#Creating plotly outputs
+renderPlotly({
+dat <- Vis1dat %>% filter(Manufacturer %in% input$Man)
+stepsize <- ((max(dat$mean,na.rm=TRUE) - min(dat$mean,na.rm=TRUE))/20)
+
+#Generating ggplot innards
+ggplotly(ggplot(data = Vis1dat %>% filter(Manufacturer %in% input$Man),aes(x=mean,y=Location,color=Manufacturer)) + 
+geom_point() +  
+theme(axis.text.x = element_text(angle = 30, hjust=1,size=9),plot.margin=unit(c(.5,.5,1.5,.5),"cm")) +
+ylab("County") + 
+scale_x_continuous("Mean Vehicle Age (Years)",
+breaks=c(seq(min(Vis1dat$mean,na.rm=TRUE),
+max(Vis1dat$mean,na.rm=TRUE),round(stepsize,1)))),
+width= 900, 
+height= 700) %>% config(staticPlot = FALSE, displayModeBar = FALSE, workspace = 
+TRUE, sendData = FALSE, displaylogo = FALSE) }) 
+
+```
+
+
+
+
+
+
+
+
+
+
