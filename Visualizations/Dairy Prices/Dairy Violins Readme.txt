@@ -1,0 +1,2 @@
+An expressive violin graph layered to allow comparisons of two dairy products' closing prices over one year. This opperates as a fancier box-plot, allowing one to ask questions when long protrusions and odd shapes crop up, on top of understanding central tendencies. 
+The line was meant to help track trends in this information dense graph, but it does cut into the visual clarity I was striving for, somewhat.
