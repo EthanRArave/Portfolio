@@ -1,0 +1,2 @@
+A clean, straight forward bar-graph comparing initial and ten year median earnings for given degrees.
+The goal here was a focus on clarity and utilizing a wide array of ggplot's relatively robust capabilities.
