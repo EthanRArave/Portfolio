@@ -1,0 +1,170 @@
+---
+title: "Seoul Air Quality"
+output: flexdashboard::flex_dashboard
+runtime: shiny
+vertical_layout: scroll
+---
+```{r global, include=TRUE}
+
+#Requisite Libraries
+library(dplyr)
+library(ggplot2)
+library(plotly)
+library(reshape)
+
+#Data https://www.kaggle.com/jihyeseo/seoulairreport/data
+dat <- read.csv("SeoulHourlyAvgAirPollution.csv",header=TRUE)
+
+#As the data is in Korean, some heavy formatting has to take place.
+colnames(dat) <- c("Datetime","Location","Nitrogen_dioxide","Ozone","Carbon_Monoxide","Sulfur_Dioxide","Fine_Dust","Ultrafine_Dust")
+dat$Location <- as.character(dat$Location)
+dat <- dat %>%
+     mutate(Location=replace(Location, Location=="강남구", "Gangnam District")) %>%
+     mutate(Location=replace(Location, Location=="강동구", "Gangdong District")) %>%
+     mutate(Location=replace(Location, Location=="강북구", "Gangbuk District")) %>%
+     mutate(Location=replace(Location, Location=="강서구", "Gangseo-gu")) %>%
+     mutate(Location=replace(Location, Location=="관악구", "Gwanak District")) %>%
+     mutate(Location=replace(Location, Location=="광진구", "Gwangjin District")) %>%
+     mutate(Location=replace(Location, Location=="구로구", "Guro District")) %>%
+     mutate(Location=replace(Location, Location=="금천구", "Geumcheon District")) %>%
+     mutate(Location=replace(Location, Location=="노원구", "Nowon District")) %>%
+     mutate(Location=replace(Location, Location=="도봉구", "Dobong District")) %>%
+     mutate(Location=replace(Location, Location=="동대문구", "Dongdaemun District")) %>%
+     mutate(Location=replace(Location, Location=="동작구", "Dongjak District")) %>%
+     mutate(Location=replace(Location, Location=="마포구", "Mapo District")) %>%
+     mutate(Location=replace(Location, Location=="서대문구", "Seodaemun District")) %>%
+     mutate(Location=replace(Location, Location=="서초구", "Seocho District")) %>%
+     mutate(Location=replace(Location, Location=="성동구", "Seongdong District")) %>%
+     mutate(Location=replace(Location, Location=="성북구", "Seongbuk District")) %>%
+     mutate(Location=replace(Location, Location=="송파구", "Songpa District")) %>%
+     mutate(Location=replace(Location, Location=="양천구", "Yangcheon District")) %>%
+     mutate(Location=replace(Location, Location=="영등포구", "Yeongdeungpo District")) %>%
+     mutate(Location=replace(Location, Location=="용산구", "Yongsan District")) %>%
+     mutate(Location=replace(Location, Location=="은평구", "Eunpyeong District")) %>%
+     mutate(Location=replace(Location, Location=="종로구", "Jongno District")) %>%
+     mutate(Location=replace(Location, Location=="중구", "Jung District")) %>%
+     mutate(Location=replace(Location, Location=="중랑구", "Jungnang District")) %>%
+     as.data.frame()
+
+#Refactoring data for visual features
+dat <- dat %>% as_tibble() %>%
+mutate(
+    Day = substr(Datetime,7,8),
+    Hour = substr(Datetime,9,10)
+    )
+dat$Day <- as.numeric(dat$Day)
+Loclist <- unique(dat$Location) 
+ParticulateList <-  colnames(dat)[3:6]  
+Dayname <- data.frame(name=c("Saturday","Sunday","Monday","Tuesday","Wednesday","Thursday","Friday"),Day=c(18,19,20,21,22,23,24))
+Dayname$name <- as.character(Dayname$name)
+
+```
+
+Column {.sidebar}
+-----------------------------------------------------------------------
+
+```{r}
+
+#Creating input methodologies 
+selectInput("Particle", label = "Particulte Type",
+            choices = ParticulateList, selected = "Ozone")
+
+sliderInput("day", label = "Day in November of 2017",
+            min = 18, max = 24, value = 18, step = 1)
+
+selectInput("Loc", label = "Location Subset",
+            choices = Loclist, selected = "Gangnam District", multiple = TRUE)
+
+
+```
+
+Column {.tabset}
+-----------------------------------------------------------------------
+
+### Contaminant Concentration (Parts Per Million)
+
+Particulate composition and quantity in Seoul, 
+measured over a six day period Nov-18 through Nov-24.
+
+
+```{r}
+
+#Rendering output for top layer
+renderPlotly({
+set <- dat %>% filter(Day == input$day, Location %in% input$Loc)
+
+if (input$Particle == "Ozone"){
+    top <- max(range(dat$Ozone,na.rm=TRUE))
+    bot <- min(range(dat$Ozone,na.rm=TRUE))
+    steps <- ((top-bot)/10)
+}
+else if (input$Particle == "Nitrogen_dioxide"){
+    top <- max(range(dat$Nitrogen_dioxide,na.rm=TRUE))
+    bot <- min(range(dat$Nitrogen_dioxide,na.rm=TRUE))
+    steps <- ((top-bot)/10)
+}
+else if (input$Particle == "Carbon_Monoxide"){
+    top <- max(range(dat$Carbon_Monoxide,na.rm=TRUE))
+    bot <- min(range(dat$Carbon_Monoxide,na.rm=TRUE))
+    steps <- ((top-bot)/10)   
+}
+else if (input$Particle == "Sulfur_Dioxide"){
+    top <- max(range(dat$Sulfur_Dioxide,na.rm=TRUE))
+    bot <- min(range(dat$Sulfur_Dioxide,na.rm=TRUE))
+    steps <- ((top-bot)/10)    
+}
+
+#Creating a ggplot graph
+plot1 <- ggplot(data = set,aes(x=Hour , y=eval(parse(text = input$Particle)), 
+group=Location,color=Location)) + geom_line() +
+theme(plot.margin=unit(c(1.3,1.3,1.6,1.4),"cm")) + 
+xlab(paste("Hours of the Day on November",Dayname$name[Dayname$Day==input$day],"the",input$day,"- 2017")) +
+scale_y_continuous(paste("Parts Per Millions:",input$Particle),breaks=c(seq(0,top,steps))) +
+coord_cartesian(ylim=c(0,top))
+
+#Utilizing a plotly shell for the ggplot graph
+ggplotly(plot1) %>% 
+config(staticPlot = FALSE, displayModeBar = FALSE, workspace = TRUE, sendData = FALSE, displaylogo = FALSE)
+})
+
+```
+
+### Particulate Rates  
+Graph will update with facets for each location selected.
+
+```{r}
+
+#Rendering output for second layer
+renderPlotly({
+formelting <- as.data.frame(dat[dat$Day == input$day & dat$Location %in% input$Loc,c('Hour','Fine_Dust','Ultrafine_Dust',"Location")])
+dfm <- melt(formelting,id =c("Hour","Location"))
+if (length(input$Loc) <= 1){
+ggplotly(
+ggplot(data = dfm,aes(x=Hour , y=value, fill=variable)) +
+geom_hline(yintercept = 85,color='blue',show.legend=TRUE) + 
+geom_hline(yintercept = 90,color='red',show.legend=TRUE) +
+facet_wrap(~Location) +
+geom_bar(position="dodge", stat="identity") +
+ylab("Micrograms of dust per Cubic Meter") +
+xlab(paste("Hours of the Day on November",Dayname$name[Dayname$Day==input$day],"the",input$day,"- 2017")) +
+ggtitle("Particulate Dust Levels") +
+annotate("text", label = "Ultrafine Dust Warning Level", x = 4, y = 86.8, size = 3, colour = "blue") +
+annotate("text", label = "Fine Dust Warning Level", x = 3.5, y = 91.8, size = 3, colour = "red") +
+theme(axis.text.x = element_text(size=5),plot.margin=unit(c(1.3,1.3,1.6,1.4),"cm"))
+) %>% config(staticPlot = FALSE, displayModeBar = FALSE, workspace = TRUE, sendData = FALSE, displaylogo = FALSE)
+}
+else{
+ggplotly(
+ggplot(data = dfm,aes(x=Hour , y=value, fill=variable)) +
+geom_hline(yintercept = 85,color='blue',show.legend=TRUE) + 
+geom_hline(yintercept = 90,color='red',show.legend=TRUE) +
+facet_wrap(~Location) +
+geom_bar(position="dodge", stat="identity") +
+ylab("Micrograms of dust per Cubic Meter") +
+xlab(paste("Hours of the Day on November",input$day,"- 2017")) +
+ggtitle("Particulate Dust Levels") +
+theme(axis.text.x = element_text(size=5),plot.margin=unit(c(1.3,1.3,1.6,1.4),"cm"))
+) %>% config(staticPlot = FALSE, displayModeBar = FALSE, workspace = TRUE, sendData = FALSE, displaylogo = FALSE)
+}
+})
+```
